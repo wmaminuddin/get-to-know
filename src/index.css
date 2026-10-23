@@ -65,6 +65,17 @@ button {
   flex-direction: column;
 }
 
+.app-version {
+  margin: 1.5rem 0 0;
+  padding-top: 0.75rem;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: rgba(244, 240, 230, 0.28);
+  user-select: all;
+}
+
 .brand {
   font-family: var(--font-display);
   font-weight: 700;
@@ -224,6 +235,28 @@ h2 {
   background: transparent;
   border: 1px solid rgba(224, 122, 122, 0.45);
   color: #f0b4b4;
+}
+
+.btn-skip {
+  align-self: center;
+  margin-top: 0.15rem;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: rgba(244, 240, 230, 0.38);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(244, 240, 230, 0.22);
+  transition: color 0.15s ease;
+}
+
+.btn-skip:hover:not(:disabled) {
+  color: rgba(244, 240, 230, 0.55);
+}
+
+.btn-skip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .btn-row {

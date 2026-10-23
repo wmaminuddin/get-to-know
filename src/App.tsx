@@ -101,6 +101,9 @@ export default function App() {
           Start over
         </button>
       ) : null}
+      <p className="app-version" title="Build version (patch bumps on each commit)">
+        v{__APP_VERSION__}
+      </p>
     </div>
   )
 }

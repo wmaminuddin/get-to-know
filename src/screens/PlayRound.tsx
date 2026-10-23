@@ -202,8 +202,13 @@ export function PlayRound({ code, playerId, session }: Props) {
         <button className="btn btn-primary" disabled={busy} onClick={() => send(false)}>
           {busy ? 'Sending…' : 'Submit answer'}
         </button>
-        <button className="btn btn-danger" disabled={busy} onClick={() => send(true)}>
-          Skip
+        <button
+          type="button"
+          className="btn-skip"
+          disabled={busy}
+          onClick={() => send(true)}
+        >
+          Skip this one
         </button>
       </div>
     </div>
