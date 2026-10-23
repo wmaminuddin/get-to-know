@@ -71,7 +71,7 @@ No custom server. Client writes/listens to `sessions/{code}/…`.
 
 - File: `src/data/systemQuestions.ts` (~48 questions, depth 1–3, themes).
 - Picker: `src/lib/deck.ts` — low overlap with user questions; depth mix ~30% / 40% / 30%.
-- AI: `src/lib/aiQuestions.ts` — OpenRouter chat completions (default `openai/gpt-4o-mini`); `resolveSystemQuestionTexts` prefers AI, fills gaps from bank.
+- AI: `src/lib/aiQuestions.ts` — OpenRouter chat completions (primary `google/gemma-4-31b-it:free`, fallback `~z-ai/glm-flash-latest`); `resolveSystemQuestionTexts` prefers AI, fills gaps from bank.
 - Count helpers: `src/lib/questionCount.ts` (clamp 3–15).
 - Env: `VITE_OPENROUTER_API_KEY` (+ optional `VITE_OPENROUTER_MODEL`) in local `.env` + Actions secrets for Pages. Key is client-visible in the bundle.
 
@@ -171,9 +171,10 @@ No custom server. Client writes/listens to `sessions/{code}/…`.
 ### 2026-10-23 — AI complementary questions
 
 - Deck build calls OpenRouter before the Firebase transaction; curated bank fills gaps or full fallback.
-- Switched from Gemini direct API (credits depleted) to OpenRouter (`openai/gpt-4o-mini` default).
+- Switched from Gemini direct API (credits depleted) to OpenRouter.
+- Models: primary `google/gemma-4-31b-it:free`, fallback `~z-ai/glm-flash-latest` (tilde is part of the OpenRouter slug).
 - Local: `VITE_OPENROUTER_API_KEY` in `.env` (gitignored). Pages: add same name as Actions secret.
-- Gotcha: `VITE_OPENROUTER_MODEL=openai/gpt-6-luna:batch` breaks chat completions → silent bank fallback. Use a chat model or omit the secret.
+- Gotcha: `VITE_OPENROUTER_MODEL=…:batch` breaks chat completions → silent bank fallback. Use a chat model or omit the secret.
 - Host-only deck build so a failed AI race cannot commit the bank first.
 - No secrets in `memory.md` or git. Rotate any key that was pasted into chat.
 

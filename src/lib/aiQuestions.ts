@@ -1,8 +1,10 @@
 /** OpenRouter complementary-question generation. Falls back to null on any failure. */
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
-/** Cheap/fast default; override with VITE_OPENROUTER_MODEL (must be a chat model). */
-const DEFAULT_MODEL = 'openai/gpt-4o-mini'
+/** Primary chat model (override with VITE_OPENROUTER_MODEL). */
+const PRIMARY_MODEL = 'google/gemma-4-31b-it:free'
+/** Used when the primary model fails / is rate-limited. */
+const FALLBACK_MODEL = '~z-ai/glm-flash-latest'
 
 interface OpenRouterResponse {
   choices?: Array<{
@@ -27,17 +29,30 @@ function isUsableChatModel(model: string): boolean {
   return true
 }
 
-function getModel(): string {
+function getPreferredModel(): string {
   const model = import.meta.env.VITE_OPENROUTER_MODEL
   if (typeof model === 'string' && model.trim()) {
     const trimmed = model.trim()
     if (isUsableChatModel(trimmed)) return trimmed
     console.warn(
-      '[openrouter] VITE_OPENROUTER_MODEL is not usable for chat completions; using default:',
+      '[openrouter] VITE_OPENROUTER_MODEL is not usable for chat completions; using primary:',
       trimmed,
     )
   }
-  return DEFAULT_MODEL
+  return PRIMARY_MODEL
+}
+
+/** Preferred first, then built-in fallback(s), de-duplicated. */
+function getModelChain(): string[] {
+  const chain = [getPreferredModel(), FALLBACK_MODEL, PRIMARY_MODEL]
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const m of chain) {
+    if (!isUsableChatModel(m) || seen.has(m)) continue
+    seen.add(m)
+    out.push(m)
+  }
+  return out.length > 0 ? out : [PRIMARY_MODEL]
 }
 
 export function isAiConfigured(): boolean {
@@ -199,16 +214,14 @@ Return JSON only: { "questions": string[] } with exactly ${count} strings.`
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 25000)
-  const preferred = getModel()
-  const models =
-    preferred === DEFAULT_MODEL ? [DEFAULT_MODEL] : [preferred, DEFAULT_MODEL]
+  const models = getModelChain()
 
   try {
     let text: string | null = null
     for (const model of models) {
       text = await requestQuestions(apiKey, model, prompt, controller.signal)
       if (text) {
-        if (model !== preferred) {
+        if (model !== models[0]) {
           console.warn('[openrouter] fell back to model', model)
         }
         break
