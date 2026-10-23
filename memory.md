@@ -1,0 +1,188 @@
+# Get to Know You — development memory
+
+Handoff doc so you can continue on another device or fork without losing direction.  
+**Repo stays public.** Do not commit secrets (`.env` is gitignored).
+
+---
+
+## What this is
+
+A mobile-first **two-device** web app for a get-to-know / date-style evening:
+
+1. Host creates a room (optional: sets how many questions each person writes, 3–15, default 10).
+2. Guest joins with a **6-character matching code**.
+3. Each person writes **N** questions; the app adds **N** complementary questions from a curated bank.
+4. Both answer the **same sequence** (total `3N`): submit or skip → wait for partner → **mutual reveal** → next.
+5. Finale: **Next Date?** Yes / No — revealed together when both have answered.
+
+Design choice for reveal UX: per-question mutual reveal (not one-way instant, not end-only). System questions are a **curated bank** (no AI for now); later AI generation was left as a possible upgrade.
+
+---
+
+## Live links
+
+| What | URL / id |
+|------|----------|
+| GitHub repo | https://github.com/wmaminuddin/get-to-know |
+| GitHub Pages | https://wmaminuddin.github.io/get-to-know/ |
+| Firebase project | `get-to-know-8275d` |
+| Firebase console | https://console.firebase.google.com/project/get-to-know-8275d |
+| RTDB region | **asia-southeast1** |
+| Correct RTDB URL host | `https://get-to-know-8275d-default-rtdb.asia-southeast1.firebasedatabase.app` |
+
+Local project path (original machine): `C:\Users\User\Projects\get-to-know`
+
+---
+
+## Stack
+
+- **Frontend:** Vite + React + TypeScript
+- **Backend:** Firebase Realtime Database (Spark / free)
+- **Hosting:** GitHub Pages via `.github/workflows/deploy.yml`
+- **Base path for Pages:** `VITE_BASE=/get-to-know/` (set in the workflow)
+
+No custom server. Client writes/listens to `sessions/{code}/…`.
+
+---
+
+## Core flow and data model
+
+### Session status
+
+`lobby` → `writing` → `answering` → `finale` → `done`
+
+### Important fields (`sessions/{code}`)
+
+- `hostId`, `questionsPerPerson` (N each writes; system adds N)
+- `players/{playerId}`: `name`, `questions[]`, `questionsReady`, …
+- `questions[]`: shared deck `{ id, text, source: 'a'|'b'|'system' }`
+- `answers/{questionIndex}/{playerId}`: `{ text, skipped, at }`
+- `progress/{playerId}`: `{ currentIndex }`
+- `finale/{playerId}`: `{ nextDate, at }`
+- `deckBuilt`: boolean (transaction-safe deck assembly)
+
+### Answer / reveal sync
+
+- You submit/skip for index `i` → wait until partner has too → show both answers.
+- **Next** advances your `currentIndex`; if partner is behind, you wait (“Waiting for them to continue…”).
+- Local identity (code + playerId + name) lives in `sessionStorage` (`gtk_identity`).
+
+### Question bank
+
+- File: `src/data/systemQuestions.ts` (~48 questions, depth 1–3, themes).
+- Picker: `src/lib/deck.ts` — low overlap with user questions; depth mix ~30% / 40% / 30%.
+- Count helpers: `src/lib/questionCount.ts` (clamp 3–15).
+
+---
+
+## Key files
+
+| Path | Role |
+|------|------|
+| `src/App.tsx` | Routes by session status; lobby→writing promote; deck build trigger |
+| `src/screens/Home.tsx` | Create / join; host sets `questionsPerPerson` |
+| `src/screens/Lobby.tsx` | Share code; show round size |
+| `src/screens/WriteQuestions.tsx` | Enter N questions |
+| `src/screens/PlayRound.tsx` | Answer / wait / reveal loop |
+| `src/screens/Finale.tsx` | Next Date? Yes/No |
+| `src/lib/sessionApi.ts` | Firebase create/join/subscribe/answers/deck |
+| `src/firebase.ts` | Config from `VITE_FIREBASE_*` |
+| `src/data/systemQuestions.ts` | Curated bank |
+| `database.rules.json` | Open session read/write (friends toy app) |
+| `.github/workflows/deploy.yml` | Build with secrets → GitHub Pages |
+| `.env.example` | Template for local env |
+| `README.md` | Setup / deploy / play instructions |
+
+---
+
+## Setup on a new device
+
+1. Clone: `git clone https://github.com/wmaminuddin/get-to-know.git`
+2. `npm install`
+3. `cp .env.example .env` (Windows: `copy .env.example .env`)
+4. Fill Firebase values from:
+   - Firebase Console → Project settings → Your apps, **and**
+   - Realtime Database → copy the **exact** database URL (must include region if not US default)
+5. Or copy `.env` from a machine that already works (never commit it).
+6. GitHub Actions already has secrets named `VITE_FIREBASE_*` for Pages deploys — recreate them on a fork.
+7. `npm run dev` → open on two browsers/phones.
+
+### Secrets policy
+
+- **Do not** put API keys in this file or in git.
+- Local: `.env`
+- CI: repo **Settings → Secrets and variables → Actions**
+- Source of truth for URL: Firebase console (region-specific)
+
+---
+
+## Gotchas (learned the hard way)
+
+1. **Wrong RTDB URL hangs “Creating…”**  
+   `https://…-default-rtdb.firebaseio.com` returned **404** for this project.  
+   Correct: `https://get-to-know-8275d-default-rtdb.asia-southeast1.firebasedatabase.app`  
+   Create path now has a ~12s timeout with a clearer error if the URL is wrong.
+
+2. **Vite only reads `.env` on startup** — restart `npm run dev` after changing env.
+
+3. **Pages base path** — assets break if `VITE_BASE` is not `/get-to-know/` for this repo name.
+
+4. **Question count is per person** — total answered = `3 × questionsPerPerson` (you + them + system).
+
+5. **Security** — rules are permissive for anyone who knows a session path; codes are for trusted pairs, not production privacy.
+
+6. **Repo visibility** — intentionally left **public** so GitHub Pages on Free stays simple.
+
+---
+
+## Conversation / decision log
+
+### 2026-10-23 — Product and build
+
+- Idea: two phones, matching code, each asks 10, app adds 10 complementary, both answer 30 with live reveal, end with Next Date? Yes/No.
+- Chose **curated bank** over AI for v1 (simpler, free, no API keys for LLM).
+- Stack: Vite/React/TS + Firebase RTDB + GitHub Pages.
+- Implemented full flow in `C:\Users\User\Projects\get-to-know`.
+- UI: mobile-first, dark green / coral accent (avoid purple-SaaS / cream-terracotta clichés).
+
+### 2026-10-23 — Firebase
+
+- Project `get-to-know-8275d` created; web app config put in local `.env`.
+- Create room stuck until RTDB URL fixed to **asia-southeast1** `.firebasedatabase.app`.
+
+### 2026-10-23 — Configurable round size
+
+- Host can set questions each person writes (3–15).
+- System adds the same count; lobby shows total `3N`.
+
+### 2026-10-23 — Publish
+
+- Repo: `wmaminuddin/get-to-know` (public).
+- Actions deploy succeeded; site live at GitHub Pages URL above.
+- Firebase values stored as Actions secrets (not in git).
+
+### 2026-10-23 — Handoff
+
+- User asked to make repo private + `memory.md`; then decided **keep public**, only add this `memory.md`.
+
+---
+
+## Suggested next work
+
+- [ ] Optional: AI-generated complementary questions (Gemini free tier + tiny serverless), with bank as fallback
+- [ ] Tighter Firebase rules / session TTL / cleanup of old sessions
+- [ ] Shareable summary or “copy answers” at the end
+- [ ] Update README play section to mention configurable N (still says fixed 10 in places)
+- [ ] Phone network testing: `npm run dev -- --host` for LAN
+- [ ] Keep this `memory.md` updated when making product decisions
+
+---
+
+## Quick commands
+
+```bash
+npm install
+npm run dev
+npm run build
+# deploy is automatic on push to main (GitHub Actions → Pages)
+```
