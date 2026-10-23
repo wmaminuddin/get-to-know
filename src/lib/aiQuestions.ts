@@ -1,7 +1,7 @@
 /** OpenRouter complementary-question generation. Falls back to null on any failure. */
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
-/** Cheap/fast default; override with VITE_OPENROUTER_MODEL */
+/** Cheap/fast default; override with VITE_OPENROUTER_MODEL (must be a chat model). */
 const DEFAULT_MODEL = 'openai/gpt-4o-mini'
 
 interface OpenRouterResponse {
@@ -18,9 +18,25 @@ function getApiKey(): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
+/** Chat-completions only — reject batch / offline adapter slugs. */
+function isUsableChatModel(model: string): boolean {
+  const m = model.trim().toLowerCase()
+  if (!m || !m.includes('/')) return false
+  if (m.includes(':batch')) return false
+  if (m.endsWith(':offline')) return false
+  return true
+}
+
 function getModel(): string {
   const model = import.meta.env.VITE_OPENROUTER_MODEL
-  if (typeof model === 'string' && model.trim()) return model.trim()
+  if (typeof model === 'string' && model.trim()) {
+    const trimmed = model.trim()
+    if (isUsableChatModel(trimmed)) return trimmed
+    console.warn(
+      '[openrouter] VITE_OPENROUTER_MODEL is not usable for chat completions; using default:',
+      trimmed,
+    )
+  }
   return DEFAULT_MODEL
 }
 
@@ -101,6 +117,51 @@ function parseQuestionsJson(text: string, count: number): string[] | null {
   return out.length > 0 ? out : null
 }
 
+async function requestQuestions(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  signal: AbortSignal,
+): Promise<string | null> {
+  const res = await fetch(ENDPOINT, {
+    method: 'POST',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+      'HTTP-Referer':
+        typeof window !== 'undefined' ? window.location.origin : 'https://wmaminuddin.github.io',
+      'X-Title': 'Get to Know You',
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.9,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You generate short get-to-know questions that complement what two people already wrote. Never repeat or closely paraphrase their questions. Reply with valid JSON only, no markdown.',
+        },
+        { role: 'user', content: prompt },
+      ],
+    }),
+  })
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    console.warn('[openrouter] HTTP', res.status, model, body)
+    return null
+  }
+
+  const data = (await res.json()) as OpenRouterResponse
+  if (data.error?.message) {
+    console.warn('[openrouter]', model, data.error.message)
+    return null
+  }
+  return data.choices?.[0]?.message?.content ?? null
+}
+
 /**
  * Ask OpenRouter for complementary get-to-know questions.
  * Returns null if unconfigured or the call/parse fails.
@@ -137,46 +198,24 @@ ${listed || '(none)'}
 Return JSON only: { "questions": string[] } with exactly ${count} strings.`
 
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 20000)
+  const timer = setTimeout(() => controller.abort(), 25000)
+  const preferred = getModel()
+  const models =
+    preferred === DEFAULT_MODEL ? [DEFAULT_MODEL] : [preferred, DEFAULT_MODEL]
 
   try {
-    const res = await fetch(ENDPOINT, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-        'HTTP-Referer':
-          typeof window !== 'undefined' ? window.location.origin : 'https://wmaminuddin.github.io',
-        'X-Title': 'Get to Know You',
-      },
-      body: JSON.stringify({
-        model: getModel(),
-        temperature: 0.9,
-        response_format: { type: 'json_object' },
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You generate short get-to-know questions that complement what two people already wrote. Never repeat or closely paraphrase their questions. Reply with valid JSON only, no markdown.',
-          },
-          { role: 'user', content: prompt },
-        ],
-      }),
-    })
-
-    if (!res.ok) {
-      console.warn('[openrouter] HTTP', res.status, await res.text().catch(() => ''))
-      return null
+    let text: string | null = null
+    for (const model of models) {
+      text = await requestQuestions(apiKey, model, prompt, controller.signal)
+      if (text) {
+        if (model !== preferred) {
+          console.warn('[openrouter] fell back to model', model)
+        }
+        break
+      }
     }
-
-    const data = (await res.json()) as OpenRouterResponse
-    if (data.error?.message) {
-      console.warn('[openrouter]', data.error.message)
-      return null
-    }
-    const text = data.choices?.[0]?.message?.content
     if (!text) return null
+
     const parsed = parseQuestionsJson(text, count)
     if (!parsed) return null
     // Drop any model output that still overlaps what users wrote.

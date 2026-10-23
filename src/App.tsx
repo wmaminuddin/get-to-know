@@ -36,10 +36,12 @@ export default function App() {
     }
   }, [identity, session])
 
-  // When both players finish writing, ensure deck is built (either client may win the race)
+  // Host builds the deck once both are ready (avoids a race where a failed AI
+  // client commits the bank while the other client's AI result is discarded).
   useEffect(() => {
     if (!identity || !session) return
     if (session.deckBuilt || session.questions?.length) return
+    if (identity.playerId !== session.hostId) return
     const players = Object.values(session.players ?? {})
     if (players.length === 2 && players.every((p) => p.questionsReady)) {
       void tryBuildDeck(identity.code)

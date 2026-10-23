@@ -41,11 +41,13 @@ Add to `.env` (and as a GitHub Actions secret for Pages):
 
 ```
 VITE_OPENROUTER_API_KEY=...
-# optional:
+# optional chat model (default: openai/gpt-4o-mini). Do NOT use :batch models.
 # VITE_OPENROUTER_MODEL=openai/gpt-4o-mini
 ```
 
 When set, the app asks OpenRouter for the complementary N questions after both players submit; if the call fails, it falls back to the curated bank. The key is baked into the client bundle — restrict / rotate it on [OpenRouter](https://openrouter.ai/) if you can.
+
+If AI never appears and you only see bank questions, check the browser console for `[openrouter]` errors and confirm `VITE_OPENROUTER_MODEL` is a **chat** model (not `*:batch`).
 
 ### 3. Run locally
 

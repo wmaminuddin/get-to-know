@@ -32,7 +32,10 @@ export function WriteQuestions({ code, playerId, session }: Props) {
     setError(null)
     try {
       await submitQuestions(code, playerId, questions, perPerson)
-      await tryBuildDeck(code)
+      // Only the host runs AI + deck build (guest relies on App's host effect).
+      if (playerId === session.hostId) {
+        await tryBuildDeck(code)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save questions.')
     } finally {

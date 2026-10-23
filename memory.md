@@ -173,6 +173,8 @@ No custom server. Client writes/listens to `sessions/{code}/…`.
 - Deck build calls OpenRouter before the Firebase transaction; curated bank fills gaps or full fallback.
 - Switched from Gemini direct API (credits depleted) to OpenRouter (`openai/gpt-4o-mini` default).
 - Local: `VITE_OPENROUTER_API_KEY` in `.env` (gitignored). Pages: add same name as Actions secret.
+- Gotcha: `VITE_OPENROUTER_MODEL=openai/gpt-6-luna:batch` breaks chat completions → silent bank fallback. Use a chat model or omit the secret.
+- Host-only deck build so a failed AI race cannot commit the bank first.
 - No secrets in `memory.md` or git. Rotate any key that was pasted into chat.
 
 ---
