@@ -15,7 +15,7 @@ A mobile-first **two-device** web app for a get-to-know / date-style evening:
 4. Both answer the **same sequence** (total `3N`): submit or skip → wait for partner → **mutual reveal** → next.
 5. Finale: **Next Date?** Yes / No — revealed together when both have answered.
 
-Design choice for reveal UX: per-question mutual reveal (not one-way instant, not end-only). System questions are a **curated bank** (no AI for now); later AI generation was left as a possible upgrade.
+Design choice for reveal UX: per-question mutual reveal (not one-way instant, not end-only). System questions: **OpenRouter** complementary generation when `VITE_OPENROUTER_API_KEY` is set, with the **curated bank** as fill/fallback.
 
 ---
 
@@ -67,11 +67,13 @@ No custom server. Client writes/listens to `sessions/{code}/…`.
 - **Next** advances your `currentIndex`; if partner is behind, you wait (“Waiting for them to continue…”).
 - Local identity (code + playerId + name) lives in `sessionStorage` (`gtk_identity`).
 
-### Question bank
+### Question bank + AI
 
 - File: `src/data/systemQuestions.ts` (~48 questions, depth 1–3, themes).
 - Picker: `src/lib/deck.ts` — low overlap with user questions; depth mix ~30% / 40% / 30%.
+- AI: `src/lib/aiQuestions.ts` — OpenRouter chat completions (default `openai/gpt-4o-mini`); `resolveSystemQuestionTexts` prefers AI, fills gaps from bank.
 - Count helpers: `src/lib/questionCount.ts` (clamp 3–15).
+- Env: `VITE_OPENROUTER_API_KEY` (+ optional `VITE_OPENROUTER_MODEL`) in local `.env` + Actions secrets for Pages. Key is client-visible in the bundle.
 
 ---
 
@@ -87,7 +89,8 @@ No custom server. Client writes/listens to `sessions/{code}/…`.
 | `src/screens/Finale.tsx` | Next Date? Yes/No |
 | `src/lib/sessionApi.ts` | Firebase create/join/subscribe/answers/deck |
 | `src/firebase.ts` | Config from `VITE_FIREBASE_*` |
-| `src/data/systemQuestions.ts` | Curated bank |
+| `src/data/systemQuestions.ts` | Curated bank (fallback) |
+| `src/lib/aiQuestions.ts` | OpenRouter complementary questions |
 | `database.rules.json` | Open session read/write (friends toy app) |
 | `.github/workflows/deploy.yml` | Build with secrets → GitHub Pages |
 | `.env.example` | Template for local env |
@@ -165,11 +168,18 @@ No custom server. Client writes/listens to `sessions/{code}/…`.
 
 - User asked to make repo private + `memory.md`; then decided **keep public**, only add this `memory.md`.
 
+### 2026-10-23 — AI complementary questions
+
+- Deck build calls OpenRouter before the Firebase transaction; curated bank fills gaps or full fallback.
+- Switched from Gemini direct API (credits depleted) to OpenRouter (`openai/gpt-4o-mini` default).
+- Local: `VITE_OPENROUTER_API_KEY` in `.env` (gitignored). Pages: add same name as Actions secret.
+- No secrets in `memory.md` or git. Rotate any key that was pasted into chat.
+
 ---
 
 ## Suggested next work
 
-- [ ] Optional: AI-generated complementary questions (Gemini free tier + tiny serverless), with bank as fallback
+- [x] AI-generated complementary questions (OpenRouter + bank fallback) — client-side key for now; optional later: tiny serverless proxy
 - [ ] Tighter Firebase rules / session TTL / cleanup of old sessions
 - [ ] Shareable summary or “copy answers” at the end
 - [ ] Update README play section to mention configurable N (still says fixed 10 in places)

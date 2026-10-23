@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { WaitingState } from '../components/WaitingState'
-import { submitQuestions, tryBuildDeck } from '../lib/sessionApi'
+import { isAiConfigured } from '../lib/aiQuestions'
 import { getQuestionsPerPerson } from '../lib/questionCount'
+import { submitQuestions, tryBuildDeck } from '../lib/sessionApi'
 import type { Session } from '../types'
 
 interface Props {
@@ -53,7 +54,9 @@ export function WriteQuestions({ code, playerId, session }: Props) {
           title={partnerReady ? 'Building your deck…' : 'Waiting for their questions…'}
           detail={
             partnerReady
-              ? `Putting together ${totalRound} shared questions.`
+              ? isAiConfigured()
+                ? `Writing ${perPerson} complementary questions with AI, then assembling ${totalRound} total.`
+                : `Putting together ${totalRound} shared questions.`
               : `They are still writing their ${perPerson} questions.`
           }
         />

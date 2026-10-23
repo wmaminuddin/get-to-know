@@ -1,5 +1,6 @@
 import { SYSTEM_QUESTIONS, type BankQuestion, type Depth } from '../data/systemQuestions'
 import type { QuestionSource, SessionQuestion } from '../types'
+import { generateComplementaryQuestions } from './aiQuestions'
 import { depthTargets } from './questionCount'
 
 const STOP = new Set([
@@ -149,11 +150,36 @@ export function pickSystemQuestions(
   return picked.slice(0, count)
 }
 
+/**
+ * Prefer AI complementary questions; fill gaps / fall back to curated bank.
+ */
+export async function resolveSystemQuestionTexts(
+  userQuestions: string[],
+  count: number,
+): Promise<string[]> {
+  const bank = pickSystemQuestions(userQuestions, count).map((q) => q.text)
+  if (count <= 0) return []
+
+  const ai = await generateComplementaryQuestions(userQuestions, count)
+  if (!ai?.length) return bank
+
+  const seen = new Set(ai.map((q) => q.toLowerCase()))
+  const merged = [...ai]
+  for (const b of bank) {
+    if (merged.length >= count) break
+    if (seen.has(b.toLowerCase())) continue
+    seen.add(b.toLowerCase())
+    merged.push(b)
+  }
+  return merged.slice(0, count)
+}
+
 export function buildDeck(
   hostId: string,
   playerIds: [string, string],
   questionsByPlayer: Record<string, string[]>,
   questionsPerPerson: number,
+  systemTexts?: string[],
 ): SessionQuestion[] {
   const [idA, idB] =
     playerIds[0] === hostId
@@ -164,7 +190,10 @@ export function buildDeck(
 
   const aQs = questionsByPlayer[idA] ?? []
   const bQs = questionsByPlayer[idB] ?? []
-  const system = pickSystemQuestions([...aQs, ...bQs], questionsPerPerson)
+  const system =
+    systemTexts && systemTexts.length >= questionsPerPerson
+      ? systemTexts.slice(0, questionsPerPerson)
+      : pickSystemQuestions([...aQs, ...bQs], questionsPerPerson).map((q) => q.text)
 
   const deck: SessionQuestion[] = []
   aQs.forEach((text, i) => {
@@ -173,8 +202,8 @@ export function buildDeck(
   bQs.forEach((text, i) => {
     deck.push({ id: `b-${i}`, text, source: 'b' as QuestionSource })
   })
-  system.forEach((q, i) => {
-    deck.push({ id: `s-${i}`, text: q.text, source: 'system' })
+  system.forEach((text, i) => {
+    deck.push({ id: `s-${i}`, text, source: 'system' })
   })
   return deck
 }

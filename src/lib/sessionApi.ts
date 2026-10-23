@@ -15,7 +15,7 @@ import type {
   SessionQuestion,
 } from '../types'
 import { generatePlayerId, generateSessionCode, normalizeCode } from './codes'
-import { buildDeck } from './deck'
+import { buildDeck, resolveSystemQuestionTexts } from './deck'
 import {
   clampQuestionsPerPerson,
   DEFAULT_QUESTIONS_PER_PERSON,
@@ -148,47 +148,74 @@ export async function submitQuestions(
 /** Build shared deck once both players are ready (safe under concurrency). */
 export async function tryBuildDeck(code: string): Promise<boolean> {
   const sRef = sessionRef(code)
+  const snap = await get(sRef)
+  if (!snap.exists()) return false
+
+  const preview = snap.val() as Session
+  if (preview.deckBuilt || preview.questions?.length) return false
+
+  const perPerson = getQuestionsPerPerson(preview)
+  const players = preview.players ?? {}
+  const ids = Object.keys(players)
+  if (ids.length !== 2) return false
+  if (
+    !ids.every(
+      (id) =>
+        players[id]?.questionsReady &&
+        players[id]?.questions?.length === perPerson,
+    )
+  ) {
+    return false
+  }
+
+  const [a, b] = ids as [string, string]
+  const aQs = players[a]!.questions!
+  const bQs = players[b]!.questions!
+  // AI outside the transaction (async); bank fills any gaps / failures.
+  const systemTexts = await resolveSystemQuestionTexts([...aQs, ...bQs], perPerson)
+
   let built = false
   await runTransaction(sRef, (current) => {
     if (!current) return current
     const session = current as Session
     if (session.deckBuilt || session.questions?.length) return session
 
-    const perPerson = getQuestionsPerPerson(session)
-    const players = session.players ?? {}
-    const ids = Object.keys(players)
-    if (ids.length !== 2) return session
+    const livePlayers = session.players ?? {}
+    const liveIds = Object.keys(livePlayers)
+    if (liveIds.length !== 2) return session
+    const n = getQuestionsPerPerson(session)
     if (
-      !ids.every(
+      !liveIds.every(
         (id) =>
-          players[id]?.questionsReady &&
-          players[id]?.questions?.length === perPerson,
+          livePlayers[id]?.questionsReady &&
+          livePlayers[id]?.questions?.length === n,
       )
     ) {
       return session
     }
 
-    const [a, b] = ids as [string, string]
+    const [idA, idB] = liveIds as [string, string]
     const deck = buildDeck(
       session.hostId,
-      [a, b],
+      [idA, idB],
       {
-        [a]: players[a]!.questions!,
-        [b]: players[b]!.questions!,
+        [idA]: livePlayers[idA]!.questions!,
+        [idB]: livePlayers[idB]!.questions!,
       },
-      perPerson,
+      n,
+      systemTexts,
     )
 
     built = true
     return {
       ...session,
-      questionsPerPerson: perPerson,
+      questionsPerPerson: n,
       questions: deck,
       deckBuilt: true,
       status: 'answering',
       progress: {
-        [a]: { currentIndex: 0 },
-        [b]: { currentIndex: 0 },
+        [idA]: { currentIndex: 0 },
+        [idB]: { currentIndex: 0 },
       },
     }
   })

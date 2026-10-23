@@ -1,6 +1,6 @@
 # Get to Know You
 
-A simple two-device web app: pair with a short code, each write 10 questions, the app adds 10 complementary questions from a curated bank, then you both answer the same 30 questions with a wait-and-reveal. Ends with **Next Date? Yes / No**.
+A simple two-device web app: pair with a short code, each write N questions (host picks 3–15, default 10), the app adds N complementary questions (OpenRouter when configured, otherwise a curated bank), then you both answer the same `3N` questions with a wait-and-reveal. Ends with **Next Date? Yes / No**.
 
 ## Stack
 
@@ -35,6 +35,18 @@ cp .env.example .env
 3. Enable **Realtime Database** (start in test mode, or paste rules from `database.rules.json`).
 4. These rules allow anyone who knows a session code to read/write that session. Fine for friends; not for a public production app.
 
+### Optional: OpenRouter complementary questions
+
+Add to `.env` (and as a GitHub Actions secret for Pages):
+
+```
+VITE_OPENROUTER_API_KEY=...
+# optional:
+# VITE_OPENROUTER_MODEL=openai/gpt-4o-mini
+```
+
+When set, the app asks OpenRouter for the complementary N questions after both players submit; if the call fails, it falls back to the curated bank. The key is baked into the client bundle — restrict / rotate it on [OpenRouter](https://openrouter.ai/) if you can.
+
 ### 3. Run locally
 
 ```bash
@@ -54,7 +66,7 @@ Open the URL on two phones (or two browser profiles) on the same network / inter
 
    (use `/<your-repo-name>/` for project pages)
 
-3. Add the same `VITE_FIREBASE_*` values as **GitHub Actions secrets** (see `.github/workflows/deploy.yml`).
+3. Add the same `VITE_FIREBASE_*` values (and optional `VITE_OPENROUTER_API_KEY`) as **GitHub Actions secrets** (see `.github/workflows/deploy.yml`).
 4. In the repo **Settings → Pages**, set source to **GitHub Actions**.
 5. Push to `main` — the workflow builds and deploys `dist/`.
 
@@ -71,9 +83,9 @@ npm run deploy
 
 1. One person **creates** a session and shares the 6-character code.
 2. The other **joins** with the code.
-3. Each writes **10 questions**.
-4. The app adds **10** more from the bank (basic → deeper).
-5. Answer all **30** together: submit or skip → wait → reveal both answers → next.
+3. Each writes **N questions** (host sets N when creating the room).
+4. The app adds **N** more (OpenRouter if configured, else curated bank).
+5. Answer all **3N** together: submit or skip → wait → reveal both answers → next.
 6. Finale: **Next Date?** Yes / No — revealed together.
 
 ## Privacy note
