@@ -1,0 +1,11 @@
+{
+  "rules": {
+    "sessions": {
+      "$code": {
+        ".read": true,
+        ".write": true,
+        ".validate": "newData.hasChildren(['createdAt', 'status', 'hostId', 'players'])"
+      }
+    }
+  }
+}
