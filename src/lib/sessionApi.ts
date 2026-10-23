@@ -21,6 +21,13 @@ import {
   DEFAULT_QUESTIONS_PER_PERSON,
   getQuestionsPerPerson,
 } from './questionCount'
+import {
+  DEFAULT_SESSION_MODE,
+  getSessionMode,
+  isSessionMode,
+  normalizeFinalePrompt,
+  type SessionMode,
+} from './sessionModes'
 
 function sessionRef(code: string) {
   return ref(getDb(), `sessions/${code}`)
@@ -51,6 +58,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 export async function createSession(
   name: string,
   questionsPerPerson = DEFAULT_QUESTIONS_PER_PERSON,
+  options?: { mode?: SessionMode; finalePrompt?: string },
 ): Promise<{
   code: string
   playerId: string
@@ -66,11 +74,20 @@ export async function createSession(
 
   const playerId = generatePlayerId()
   const now = Date.now()
+  const sessionMode = isSessionMode(options?.mode)
+    ? options!.mode!
+    : DEFAULT_SESSION_MODE
+  const finalePrompt = normalizeFinalePrompt(
+    options?.finalePrompt ?? getSessionMode(sessionMode).defaultFinalePrompt,
+    sessionMode,
+  )
   const session: Session = {
     createdAt: now,
     status: 'lobby',
     hostId: playerId,
     questionsPerPerson: clampQuestionsPerPerson(questionsPerPerson),
+    sessionMode,
+    finalePrompt,
     players: {
       [playerId]: {
         name: name.trim() || 'Player 1',
@@ -172,7 +189,11 @@ export async function tryBuildDeck(code: string): Promise<boolean> {
   const aQs = players[a]!.questions!
   const bQs = players[b]!.questions!
   // AI outside the transaction (async); bank fills any gaps / failures.
-  const systemTexts = await resolveSystemQuestionTexts([...aQs, ...bQs], perPerson)
+  const systemTexts = await resolveSystemQuestionTexts(
+    [...aQs, ...bQs],
+    perPerson,
+    preview.sessionMode,
+  )
 
   let built = false
   await runTransaction(sRef, (current) => {
@@ -204,6 +225,7 @@ export async function tryBuildDeck(code: string): Promise<boolean> {
       },
       n,
       systemTexts,
+      session.sessionMode,
     )
 
     built = true

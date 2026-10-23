@@ -6,6 +6,7 @@ import {
   setStatusDone,
   submitFinale,
 } from '../lib/sessionApi'
+import { getFinalePrompt } from '../lib/sessionModes'
 import type { Session } from '../types'
 
 interface Props {
@@ -20,6 +21,7 @@ export function Finale({ code, playerId, session }: Props) {
   const theirs = partnerId ? session.finale?.[partnerId] : undefined
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const prompt = getFinalePrompt(session)
 
   useEffect(() => {
     if (mine && theirs && session.status !== 'done') {
@@ -27,11 +29,11 @@ export function Finale({ code, playerId, session }: Props) {
     }
   }, [mine, theirs, session.status, code])
 
-  async function choose(nextDate: boolean) {
+  async function choose(yes: boolean) {
     setBusy(true)
     setError(null)
     try {
-      await submitFinale(code, playerId, nextDate)
+      await submitFinale(code, playerId, yes)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save.')
     } finally {
@@ -45,11 +47,11 @@ export function Finale({ code, playerId, session }: Props) {
     let headline = 'Different answers'
     let detail = 'One yes, one no — honest either way.'
     if (bothYes) {
-      headline = 'Next date: yes'
-      detail = 'You both said yes. That is a good sign.'
+      headline = 'You both said yes'
+      detail = 'Matching yeses. That is a good sign.'
     } else if (bothNo) {
-      headline = 'Next date: no'
-      detail = 'You both said no. Clear is kind.'
+      headline = 'You both said no'
+      detail = 'Matching nos. Clear is kind.'
     }
 
     return (
@@ -57,6 +59,7 @@ export function Finale({ code, playerId, session }: Props) {
         <div className="screen-head">
           <p className="eyebrow">The end</p>
           <h1>Thank you for playing</h1>
+          <p className="muted">{prompt}</p>
         </div>
         <div className="result-banner">
           <h2>{headline}</h2>
@@ -81,7 +84,7 @@ export function Finale({ code, playerId, session }: Props) {
       <div className="screen">
         <div className="screen-head">
           <p className="eyebrow">Finale</p>
-          <h1>Next Date?</h1>
+          <h1>{prompt}</h1>
         </div>
         <WaitingState
           title="Waiting for their answer…"
@@ -95,15 +98,15 @@ export function Finale({ code, playerId, session }: Props) {
     <div className="screen">
       <div className="screen-head">
         <p className="eyebrow">Finale</p>
-        <h1>Next Date?</h1>
+        <h1>{prompt}</h1>
         <p className="muted">One simple question. Answer honestly — they will answer too.</p>
       </div>
       {error ? <p className="error">{error}</p> : null}
       <div className="finale-choice">
-        <button className="btn btn-yes" disabled={busy} onClick={() => choose(true)}>
+        <button className="btn btn-yes" disabled={busy} onClick={() => void choose(true)}>
           Yes
         </button>
-        <button className="btn btn-no" disabled={busy} onClick={() => choose(false)}>
+        <button className="btn btn-no" disabled={busy} onClick={() => void choose(false)}>
           No
         </button>
       </div>

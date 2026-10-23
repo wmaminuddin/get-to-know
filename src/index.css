@@ -149,12 +149,51 @@ h2 {
   gap: 0.85rem;
 }
 
-.field label {
+.field label,
+.field-label {
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
   margin-bottom: 0.4rem;
   color: var(--ink-soft);
+}
+
+.mode-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.mode-chip {
+  min-height: 2.35rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.mode-chip.is-selected {
+  border-color: rgba(232, 168, 124, 0.65);
+  background: rgba(232, 168, 124, 0.16);
+  color: var(--ink);
+}
+
+.finale-prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.55rem;
+}
+
+.btn-compact {
+  min-height: 2.4rem;
+  padding: 0.45rem 0.95rem;
+  font-size: 0.9rem;
 }
 
 .field input,

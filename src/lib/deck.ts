@@ -1,7 +1,7 @@
 import { SYSTEM_QUESTIONS, type BankQuestion, type Depth } from '../data/systemQuestions'
-import type { QuestionSource, SessionQuestion } from '../types'
+import type { QuestionSource, SessionMode, SessionQuestion } from '../types'
 import { generateComplementaryQuestions } from './aiQuestions'
-import { depthTargets } from './questionCount'
+import { depthTargetsForMode } from './questionCount'
 
 const STOP = new Set([
   'a',
@@ -93,11 +93,12 @@ function nearDuplicate(bank: BankQuestion, userTokens: Set<string>[]): boolean {
 
 /**
  * Pick complementary questions from the bank.
- * Prefer low keyword/theme overlap; depth mix ~30% / 40% / 30%.
+ * Prefer low keyword/theme overlap; depth mix follows session mode.
  */
 export function pickSystemQuestions(
   userQuestions: string[],
   count: number,
+  mode?: SessionMode | null,
 ): BankQuestion[] {
   const userTokenSets = userQuestions.map(tokenize)
   const userThemeBag = new Set<string>()
@@ -118,7 +119,7 @@ export function pickSystemQuestions(
     .filter((x) => !x.dup)
     .sort((a, b) => a.score - b.score || a.q.text.localeCompare(b.q.text))
 
-  const targets = depthTargets(count)
+  const targets = depthTargetsForMode(mode, count)
   const picked: BankQuestion[] = []
   const used = new Set<string>()
 
@@ -156,11 +157,12 @@ export function pickSystemQuestions(
 export async function resolveSystemQuestionTexts(
   userQuestions: string[],
   count: number,
+  mode?: SessionMode | null,
 ): Promise<string[]> {
-  const bank = pickSystemQuestions(userQuestions, count).map((q) => q.text)
+  const bank = pickSystemQuestions(userQuestions, count, mode).map((q) => q.text)
   if (count <= 0) return []
 
-  const ai = await generateComplementaryQuestions(userQuestions, count)
+  const ai = await generateComplementaryQuestions(userQuestions, count, mode)
   if (!ai?.length) return bank
 
   const userLower = new Set(userQuestions.map((q) => q.trim().toLowerCase()).filter(Boolean))
@@ -188,6 +190,7 @@ export function buildDeck(
   questionsByPlayer: Record<string, string[]>,
   questionsPerPerson: number,
   systemTexts?: string[],
+  mode?: SessionMode | null,
 ): SessionQuestion[] {
   const [idA, idB] =
     playerIds[0] === hostId
@@ -201,7 +204,7 @@ export function buildDeck(
   const system =
     systemTexts && systemTexts.length >= questionsPerPerson
       ? systemTexts.slice(0, questionsPerPerson)
-      : pickSystemQuestions([...aQs, ...bQs], questionsPerPerson).map((q) => q.text)
+      : pickSystemQuestions([...aQs, ...bQs], questionsPerPerson, mode).map((q) => q.text)
 
   const deck: SessionQuestion[] = []
   aQs.forEach((text, i) => {

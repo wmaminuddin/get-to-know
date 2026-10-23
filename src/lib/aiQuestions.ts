@@ -1,5 +1,11 @@
 /** OpenRouter complementary-question generation. Falls back to null on any failure. */
 
+import {
+  getSessionMode,
+  normalizeFinalePrompt,
+  type SessionMode,
+} from './sessionModes'
+
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
 /** Primary chat model (override with VITE_OPENROUTER_MODEL). */
 const PRIMARY_MODEL = 'google/gemma-4-31b-it:free'
@@ -177,6 +183,15 @@ async function requestQuestions(
   return data.choices?.[0]?.message?.content ?? null
 }
 
+function depthMixLine(mode: SessionMode | null | undefined): string {
+  const mix = getSessionMode(mode).depthMix
+  const total = mix[1] + mix[2] + mix[3] || 1
+  const p1 = Math.round((mix[1] / total) * 100)
+  const p2 = Math.round((mix[2] / total) * 100)
+  const p3 = Math.max(0, 100 - p1 - p2)
+  return `roughly ${p1}% light/fun, ${p2}% medium, ${p3}% deeper/reflective`
+}
+
 /**
  * Ask OpenRouter for complementary get-to-know questions.
  * Returns null if unconfigured or the call/parse fails.
@@ -184,6 +199,7 @@ async function requestQuestions(
 export async function generateComplementaryQuestions(
   userQuestions: string[],
   count: number,
+  mode?: SessionMode | null,
 ): Promise<string[] | null> {
   const apiKey = getApiKey()
   if (!apiKey || count <= 0) return null
@@ -191,8 +207,9 @@ export async function generateComplementaryQuestions(
   const cleanedUser = userQuestions.map((q) => q.trim()).filter((q) => q.length > 2)
   const listed = cleanedUser.map((q, i) => `${i + 1}. ${q}`).join('\n')
   const existingFingerprints = new Set(cleanedUser.map(questionFingerprint))
+  const modeConfig = getSessionMode(mode)
 
-  const prompt = `You help a two-person "get to know you" evening.
+  const prompt = `You help a two-person "get to know you" evening in "${modeConfig.label}" mode.
 
 Below are the questions the two people wrote themselves. Study them carefully: note the topics, themes, wording, and what they already covered. Your job is to add NEW complementary questions that expand the conversation — not redo theirs.
 
@@ -201,8 +218,8 @@ Generate exactly ${count} NEW questions that:
 - are clearly different from every listed question (no repeats, near-duplicates, or close paraphrases)
 - do not ask the same thing with different words (e.g. if they asked about childhood pets, do not ask about animals they grew up with)
 - learn from their list: fill gaps and complementary angles they did not cover; avoid their topics when those topics are already well covered
-- mix depth: roughly 30% light/fun, 40% medium, 30% deeper/reflective
-- are warm, specific, and suitable for a first or early date
+- mix depth: ${depthMixLine(mode)}
+- tone: ${modeConfig.aiTone}
 - are single sentences ending with ?
 - are under 120 characters each
 - avoid yes/no-only questions when possible
@@ -236,6 +253,73 @@ Return JSON only: { "questions": string[] } with exactly ${count} strings.`
     return unique.length > 0 ? unique : null
   } catch (e) {
     console.warn('[openrouter] generate failed', e)
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Ask OpenRouter for one Yes/No finale prompt matching the session mode.
+ * Returns null if unconfigured or the call/parse fails.
+ */
+export async function generateFinalePrompt(
+  mode?: SessionMode | null,
+): Promise<string | null> {
+  const apiKey = getApiKey()
+  if (!apiKey) return null
+
+  const modeConfig = getSessionMode(mode)
+  const prompt = `Suggest exactly ONE short Yes/No question for the end of a two-person "${modeConfig.label}" get-to-know session.
+
+Requirements:
+- must be answerable with Yes or No only
+- tone: ${modeConfig.aiTone}
+- under 80 characters
+- single sentence ending with ?
+- warm and clear — about wanting to continue the connection in a way that fits ${modeConfig.label.toLowerCase()} mode
+- do not use quotation marks around the question
+
+Return JSON only: { "question": string }`
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 20000)
+  const models = getModelChain()
+
+  try {
+    let text: string | null = null
+    for (const model of models) {
+      text = await requestQuestions(apiKey, model, prompt, controller.signal)
+      if (text) break
+    }
+    if (!text) return null
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      const match = text.match(/\{[\s\S]*\}/)
+      if (!match) return null
+      try {
+        parsed = JSON.parse(match[0])
+      } catch {
+        return null
+      }
+    }
+
+    const raw =
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof (parsed as { question?: unknown }).question === 'string'
+        ? (parsed as { question: string }).question
+        : typeof parsed === 'string'
+          ? parsed
+          : null
+    if (!raw) return null
+    const normalized = normalizeFinalePrompt(raw, mode)
+    return normalized.length >= 8 ? normalized : null
+  } catch (e) {
+    console.warn('[openrouter] finale prompt failed', e)
     return null
   } finally {
     clearTimeout(timer)

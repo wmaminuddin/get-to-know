@@ -1,6 +1,6 @@
 # Get to Know You
 
-A simple two-device web app: pair with a short code, each write N questions (host picks 3–15, default 10), the app adds N complementary questions (OpenRouter when configured, otherwise a curated bank), then you both answer the same `3N` questions with a wait-and-reveal. Ends with **Next Date? Yes / No**.
+A simple two-device web app: pair with a short code, host picks a **mode** (Casual → Deep) and a Yes/No finale prompt, each write N questions (3–15, default 10), the app adds N complementary questions tuned to that mode (OpenRouter when configured, otherwise a curated bank), then you both answer the same `3N` questions with a wait-and-reveal. Ends with the host’s finale question — **Yes / No**.
 
 ## Stack
 
@@ -84,12 +84,12 @@ npm run deploy
 
 ## How to play
 
-1. One person **creates** a session and shares the 6-character code.
+1. One person **creates** a session: picks a mode, optional finale Yes/No question (or AI suggest), sets N, then shares the 6-character code.
 2. The other **joins** with the code.
-3. Each writes **N questions** (host sets N when creating the room).
-4. The app adds **N** more (OpenRouter if configured, else curated bank).
+3. Each writes **N questions**.
+4. The app adds **N** more tuned to the mode (OpenRouter if configured, else curated bank).
 5. Answer all **3N** together: submit or skip → wait → reveal both answers → next.
-6. Finale: **Next Date?** Yes / No — revealed together.
+6. Finale: the host’s Yes/No question — revealed together.
 
 ## Privacy note
 

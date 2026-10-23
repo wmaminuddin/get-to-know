@@ -9,11 +9,11 @@ Handoff doc so you can continue on another device or fork without losing directi
 
 A mobile-first **two-device** web app for a get-to-know / date-style evening:
 
-1. Host creates a room (optional: sets how many questions each person writes, 3–15, default 10).
+1. Host creates a room: picks a **session mode**, optional Yes/No **finale prompt** (or AI suggest), and how many questions each person writes (3–15, default 10).
 2. Guest joins with a **6-character matching code**.
-3. Each person writes **N** questions; the app adds **N** complementary questions from a curated bank.
+3. Each person writes **N** questions; the app adds **N** complementary questions (mode-tuned depth/tone).
 4. Both answer the **same sequence** (total `3N`): submit or skip → wait for partner → **mutual reveal** → next.
-5. Finale: **Next Date?** Yes / No — revealed together when both have answered.
+5. Finale: host’s Yes/No prompt — revealed together when both have answered.
 
 Design choice for reveal UX: per-question mutual reveal (not one-way instant, not end-only). System questions: **OpenRouter** complementary generation when `VITE_OPENROUTER_API_KEY` is set, with the **curated bank** as fill/fallback.
 
@@ -54,11 +54,13 @@ No custom server. Client writes/listens to `sessions/{code}/…`.
 ### Important fields (`sessions/{code}`)
 
 - `hostId`, `questionsPerPerson` (N each writes; system adds N)
+- `sessionMode`: `casual` | `friends` | `besties` | `dating` | `deep` (default dating for old rooms)
+- `finalePrompt`: Yes/No question text shown in Finale (default `"Next Date?"` for old rooms)
 - `players/{playerId}`: `name`, `questions[]`, `questionsReady`, …
 - `questions[]`: shared deck `{ id, text, source: 'a'|'b'|'system' }`
 - `answers/{questionIndex}/{playerId}`: `{ text, skipped, at }`
 - `progress/{playerId}`: `{ currentIndex }`
-- `finale/{playerId}`: `{ nextDate, at }`
+- `finale/{playerId}`: `{ nextDate, at }` (boolean answer; field name kept for compat)
 - `deckBuilt`: boolean (transaction-safe deck assembly)
 
 ### Answer / reveal sync
@@ -70,9 +72,10 @@ No custom server. Client writes/listens to `sessions/{code}/…`.
 ### Question bank + AI
 
 - File: `src/data/systemQuestions.ts` (~48 questions, depth 1–3, themes).
-- Picker: `src/lib/deck.ts` — low overlap with user questions; depth mix ~30% / 40% / 30%.
-- AI: `src/lib/aiQuestions.ts` — OpenRouter chat completions (primary `google/gemma-4-31b-it:free`, fallback `~z-ai/glm-flash-latest`); `resolveSystemQuestionTexts` prefers AI, fills gaps from bank.
-- Count helpers: `src/lib/questionCount.ts` (clamp 3–15).
+- Modes: `src/lib/sessionModes.ts` — depth mixes + AI tone + default finale prompts.
+- Picker: `src/lib/deck.ts` — low overlap with user questions; depth mix from session mode.
+- AI: `src/lib/aiQuestions.ts` — OpenRouter chat completions (primary `google/gemma-4-31b-it:free`, fallback `~z-ai/glm-flash-latest`); `resolveSystemQuestionTexts` prefers AI, fills gaps from bank; `generateFinalePrompt` for create-time Yes/No suggestion.
+- Count helpers: `src/lib/questionCount.ts` (clamp 3–15; `depthTargetsForMode`).
 - Env: `VITE_OPENROUTER_API_KEY` (+ optional `VITE_OPENROUTER_MODEL`) in local `.env` + Actions secrets for Pages. Key is client-visible in the bundle.
 
 ---
@@ -82,15 +85,16 @@ No custom server. Client writes/listens to `sessions/{code}/…`.
 | Path | Role |
 |------|------|
 | `src/App.tsx` | Routes by session status; lobby→writing promote; deck build trigger |
-| `src/screens/Home.tsx` | Create / join; host sets `questionsPerPerson` |
-| `src/screens/Lobby.tsx` | Share code; show round size |
+| `src/screens/Home.tsx` | Create / join; mode, finale prompt, `questionsPerPerson` |
+| `src/screens/Lobby.tsx` | Share code; show mode, finale, round size |
 | `src/screens/WriteQuestions.tsx` | Enter N questions |
 | `src/screens/PlayRound.tsx` | Answer / wait / reveal loop |
-| `src/screens/Finale.tsx` | Next Date? Yes/No |
+| `src/screens/Finale.tsx` | Custom Yes/No finale prompt |
 | `src/lib/sessionApi.ts` | Firebase create/join/subscribe/answers/deck |
+| `src/lib/sessionModes.ts` | Mode labels, depth mixes, default finales |
 | `src/firebase.ts` | Config from `VITE_FIREBASE_*` |
 | `src/data/systemQuestions.ts` | Curated bank (fallback) |
-| `src/lib/aiQuestions.ts` | OpenRouter complementary questions |
+| `src/lib/aiQuestions.ts` | OpenRouter complementary + finale suggest |
 | `database.rules.json` | Open session read/write (friends toy app) |
 | `.github/workflows/deploy.yml` | Build with secrets → GitHub Pages |
 | `.env.example` | Template for local env |
@@ -178,14 +182,21 @@ No custom server. Client writes/listens to `sessions/{code}/…`.
 - Host-only deck build so a failed AI race cannot commit the bank first.
 - No secrets in `memory.md` or git. Rotate any key that was pasted into chat.
 
+### 2026-10-24 — Session modes + custom finale
+
+- Tester feedback: some questions too deep for light usage.
+- Host picks mode on create: Casual / Friends / Besties / Dating / Deep — steers bank depth mix + AI tone.
+- Finale stays Yes/No; host edits the prompt or uses “Suggest with AI” (falls back to mode default).
+- Old sessions without `sessionMode` / `finalePrompt` behave like Dating + “Next Date?”.
+
 ---
 
 ## Suggested next work
 
 - [x] AI-generated complementary questions (OpenRouter + bank fallback) — client-side key for now; optional later: tiny serverless proxy
+- [x] Session modes + customizable Yes/No finale prompt
 - [ ] Tighter Firebase rules / session TTL / cleanup of old sessions
 - [ ] Shareable summary or “copy answers” at the end
-- [ ] Update README play section to mention configurable N (still says fixed 10 in places)
 - [ ] Phone network testing: `npm run dev -- --host` for LAN
 - [ ] Keep this `memory.md` updated when making product decisions
 

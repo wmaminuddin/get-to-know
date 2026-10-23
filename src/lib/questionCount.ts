@@ -1,4 +1,10 @@
 import type { Session } from '../types'
+import {
+  DEFAULT_SESSION_MODE,
+  getSessionMode,
+  type DepthMix,
+  type SessionMode,
+} from './sessionModes'
 
 export const DEFAULT_QUESTIONS_PER_PERSON = 10
 export const MIN_QUESTIONS_PER_PERSON = 3
@@ -18,19 +24,57 @@ export function getQuestionsPerPerson(session: Session): number {
   )
 }
 
-/** Depth mix for N system questions: ~30% basic, ~40% medium, ~30% deep */
-export function depthTargets(count: number): Record<1 | 2 | 3, number> {
+/**
+ * Allocate `count` slots across depths using relative mix weights.
+ * Guarantees the three buckets sum to `count` (empty depths allowed when count is small).
+ */
+export function depthTargets(
+  count: number,
+  mix?: DepthMix,
+): Record<1 | 2 | 3, number> {
   if (count <= 0) return { 1: 0, 2: 0, 3: 0 }
-  if (count === 1) return { 1: 1, 2: 0, 3: 0 }
-  if (count === 2) return { 1: 1, 2: 1, 3: 0 }
-  const d1 = Math.max(1, Math.round(count * 0.3))
-  const d3 = Math.max(1, Math.round(count * 0.3))
-  let d2 = count - d1 - d3
-  if (d2 < 1) {
-    d2 = 1
-    // shrink the larger of d1/d3
-    if (d1 >= d3) return { 1: count - d2 - d3, 2: d2, 3: d3 }
-    return { 1: d1, 2: d2, 3: count - d1 - d2 }
+
+  const weights = mix ?? getSessionMode(DEFAULT_SESSION_MODE).depthMix
+  const w1 = Math.max(0, weights[1])
+  const w2 = Math.max(0, weights[2])
+  const w3 = Math.max(0, weights[3])
+  const totalW = w1 + w2 + w3 || 1
+
+  if (count === 1) {
+    // Prefer the heaviest weight.
+    if (w1 >= w2 && w1 >= w3) return { 1: 1, 2: 0, 3: 0 }
+    if (w2 >= w3) return { 1: 0, 2: 1, 3: 0 }
+    return { 1: 0, 2: 0, 3: 1 }
   }
+
+  let d1 = Math.round((count * w1) / totalW)
+  let d2 = Math.round((count * w2) / totalW)
+  let d3 = Math.round((count * w3) / totalW)
+  let sum = d1 + d2 + d3
+
+  // Fix rounding drift by adjusting the largest weight bucket.
+  while (sum < count) {
+    if (w1 >= w2 && w1 >= w3) d1++
+    else if (w2 >= w3) d2++
+    else d3++
+    sum++
+  }
+  while (sum > count) {
+    if (d1 >= d2 && d1 >= d3 && d1 > 0) d1--
+    else if (d2 >= d3 && d2 > 0) d2--
+    else if (d3 > 0) d3--
+    else if (d1 > 0) d1--
+    else if (d2 > 0) d2--
+    else break
+    sum--
+  }
+
   return { 1: d1, 2: d2, 3: d3 }
+}
+
+export function depthTargetsForMode(
+  mode: SessionMode | null | undefined,
+  count: number,
+): Record<1 | 2 | 3, number> {
+  return depthTargets(count, getSessionMode(mode).depthMix)
 }

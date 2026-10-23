@@ -2,6 +2,7 @@ import type { Session } from '../types'
 import { WaitingState } from '../components/WaitingState'
 import { playerName } from '../lib/sessionApi'
 import { getQuestionsPerPerson } from '../lib/questionCount'
+import { getFinalePrompt, getSessionMode } from '../lib/sessionModes'
 
 interface Props {
   session: Session
@@ -13,6 +14,8 @@ export function Lobby({ session, code, playerId }: Props) {
   const names = Object.values(session.players ?? {}).map((p) => p.name)
   const me = session.players?.[playerId]?.name ?? 'You'
   const perPerson = getQuestionsPerPerson(session)
+  const mode = getSessionMode(session.sessionMode)
+  const finalePrompt = getFinalePrompt(session)
 
   return (
     <div className="screen">
@@ -29,9 +32,18 @@ export function Lobby({ session, code, playerId }: Props) {
         {names.length > 1 ? (
           <>
             {' '}
-            · with {playerName(session, Object.keys(session.players).find((id) => id !== playerId) ?? null)}
+            · with{' '}
+            {playerName(
+              session,
+              Object.keys(session.players).find((id) => id !== playerId) ?? null,
+            )}
           </>
         ) : null}
+      </p>
+      <p className="muted" style={{ textAlign: 'center' }}>
+        Mode: <strong style={{ color: 'var(--ink)' }}>{mode.label}</strong>
+        {' · '}
+        Finale: “{finalePrompt}”
       </p>
       <p className="muted" style={{ textAlign: 'center' }}>
         This round: {perPerson} each + {perPerson} from the app = {perPerson * 3} questions
