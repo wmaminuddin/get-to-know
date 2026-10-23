@@ -37,6 +37,30 @@ function normalizeQuestion(raw: unknown): string | null {
   return cleaned
 }
 
+/** Collapse for near-duplicate checks (case, punctuation, filler words). */
+function questionFingerprint(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(
+      /\b(a|an|the|your|you|to|of|in|on|for|with|about|do|does|did|is|are|was|were|what|which|who|how|when|where|why)\b/g,
+      ' ',
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function overlapsExisting(candidate: string, existingFingerprints: Set<string>): boolean {
+  const fp = questionFingerprint(candidate)
+  if (!fp) return false
+  if (existingFingerprints.has(fp)) return true
+  for (const ex of existingFingerprints) {
+    if (!ex) continue
+    if (fp.includes(ex) || ex.includes(fp)) return true
+  }
+  return false
+}
+
 function parseQuestionsJson(text: string, count: number): string[] | null {
   let parsed: unknown
   try {
@@ -88,23 +112,26 @@ export async function generateComplementaryQuestions(
   const apiKey = getApiKey()
   if (!apiKey || count <= 0) return null
 
-  const listed = userQuestions
-    .map((q, i) => `${i + 1}. ${q.trim()}`)
-    .filter((line) => line.length > 3)
-    .join('\n')
+  const cleanedUser = userQuestions.map((q) => q.trim()).filter((q) => q.length > 2)
+  const listed = cleanedUser.map((q, i) => `${i + 1}. ${q}`).join('\n')
+  const existingFingerprints = new Set(cleanedUser.map(questionFingerprint))
 
   const prompt = `You help a two-person "get to know you" evening.
 
-Each person already wrote questions. Generate exactly ${count} NEW complementary questions that:
+Below are the questions the two people wrote themselves. Study them carefully: note the topics, themes, wording, and what they already covered. Your job is to add NEW complementary questions that expand the conversation — not redo theirs.
+
+Generate exactly ${count} NEW questions that:
 - both people will answer
-- do NOT repeat or closely paraphrase the existing questions
+- are clearly different from every listed question (no repeats, near-duplicates, or close paraphrases)
+- do not ask the same thing with different words (e.g. if they asked about childhood pets, do not ask about animals they grew up with)
+- learn from their list: fill gaps and complementary angles they did not cover; avoid their topics when those topics are already well covered
 - mix depth: roughly 30% light/fun, 40% medium, 30% deeper/reflective
 - are warm, specific, and suitable for a first or early date
 - are single sentences ending with ?
 - are under 120 characters each
 - avoid yes/no-only questions when possible
 
-Existing questions:
+Questions they wrote (do not repeat or rephrase these):
 ${listed || '(none)'}
 
 Return JSON only: { "questions": string[] } with exactly ${count} strings.`
@@ -131,7 +158,7 @@ Return JSON only: { "questions": string[] } with exactly ${count} strings.`
           {
             role: 'system',
             content:
-              'You generate short get-to-know questions. Reply with valid JSON only, no markdown.',
+              'You generate short get-to-know questions that complement what two people already wrote. Never repeat or closely paraphrase their questions. Reply with valid JSON only, no markdown.',
           },
           { role: 'user', content: prompt },
         ],
@@ -150,7 +177,11 @@ Return JSON only: { "questions": string[] } with exactly ${count} strings.`
     }
     const text = data.choices?.[0]?.message?.content
     if (!text) return null
-    return parseQuestionsJson(text, count)
+    const parsed = parseQuestionsJson(text, count)
+    if (!parsed) return null
+    // Drop any model output that still overlaps what users wrote.
+    const unique = parsed.filter((q) => !overlapsExisting(q, existingFingerprints))
+    return unique.length > 0 ? unique : null
   } catch (e) {
     console.warn('[openrouter] generate failed', e)
     return null

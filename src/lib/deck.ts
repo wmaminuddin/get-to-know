@@ -163,12 +163,20 @@ export async function resolveSystemQuestionTexts(
   const ai = await generateComplementaryQuestions(userQuestions, count)
   if (!ai?.length) return bank
 
-  const seen = new Set(ai.map((q) => q.toLowerCase()))
-  const merged = [...ai]
+  const userLower = new Set(userQuestions.map((q) => q.trim().toLowerCase()).filter(Boolean))
+  const seen = new Set<string>()
+  const merged: string[] = []
+  for (const q of ai) {
+    const key = q.toLowerCase()
+    if (userLower.has(key) || seen.has(key)) continue
+    seen.add(key)
+    merged.push(q)
+  }
   for (const b of bank) {
     if (merged.length >= count) break
-    if (seen.has(b.toLowerCase())) continue
-    seen.add(b.toLowerCase())
+    const key = b.toLowerCase()
+    if (userLower.has(key) || seen.has(key)) continue
+    seen.add(key)
     merged.push(b)
   }
   return merged.slice(0, count)
