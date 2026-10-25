@@ -2,6 +2,8 @@
 
 A simple two-device web app: pair with a short code, host picks a **mode** (Casual → Deep) and a Yes/No finale prompt, each write N questions (3–15, default 10), the app adds N complementary questions tuned to that mode (OpenRouter when configured, otherwise a curated bank), then you both answer the same `3N` questions with a wait-and-reveal. Ends with the host’s finale question — **Yes / No**.
 
+Version history: see [CHANGELOG.md](CHANGELOG.md) (`v1.0.N` tracks commits on `main`).
+
 ## Stack
 
 - **Frontend:** Vite + React + TypeScript  

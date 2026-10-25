@@ -99,6 +99,7 @@ No custom server. Client writes/listens to `sessions/{code}/…`.
 | `.github/workflows/deploy.yml` | Build with secrets → GitHub Pages |
 | `.env.example` | Template for local env |
 | `README.md` | Setup / deploy / play instructions |
+| `CHANGELOG.md` | Version history (`1.0.0` = first commit; patch per commit) |
 
 ---
 
