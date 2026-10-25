@@ -138,11 +138,18 @@ function parseQuestionsJson(text: string, count: number): string[] | null {
   return out.length > 0 ? out : null
 }
 
+const DEFAULT_SYSTEM =
+  'You generate short get-to-know questions that complement what two people already wrote. Never repeat or closely paraphrase their questions. Reply with valid JSON only, no markdown.'
+
+const COMPLEMENTARY_SYSTEM =
+  'You generate short get-to-know questions that complement what two people already wrote. Obey the mode brief in the user message strictly — prefer lighter questions when the brief says so, and never ignore its avoid-list. Never repeat or closely paraphrase their questions. Reply with valid JSON only, no markdown.'
+
 async function requestQuestions(
   apiKey: string,
   model: string,
   prompt: string,
   signal: AbortSignal,
+  systemContent: string = DEFAULT_SYSTEM,
 ): Promise<string | null> {
   const res = await fetch(ENDPOINT, {
     method: 'POST',
@@ -159,11 +166,7 @@ async function requestQuestions(
       temperature: 0.9,
       response_format: { type: 'json_object' },
       messages: [
-        {
-          role: 'system',
-          content:
-            'You generate short get-to-know questions that complement what two people already wrote. Never repeat or closely paraphrase their questions. Reply with valid JSON only, no markdown.',
-        },
+        { role: 'system', content: systemContent },
         { role: 'user', content: prompt },
       ],
     }),
@@ -181,15 +184,6 @@ async function requestQuestions(
     return null
   }
   return data.choices?.[0]?.message?.content ?? null
-}
-
-function depthMixLine(mode: SessionMode | null | undefined): string {
-  const mix = getSessionMode(mode).depthMix
-  const total = mix[1] + mix[2] + mix[3] || 1
-  const p1 = Math.round((mix[1] / total) * 100)
-  const p2 = Math.round((mix[2] / total) * 100)
-  const p3 = Math.max(0, 100 - p1 - p2)
-  return `roughly ${p1}% light/fun, ${p2}% medium, ${p3}% deeper/reflective`
 }
 
 /**
@@ -213,13 +207,14 @@ export async function generateComplementaryQuestions(
 
 Below are the questions the two people wrote themselves. Study them carefully: note the topics, themes, wording, and what they already covered. Your job is to add NEW complementary questions that expand the conversation — not redo theirs.
 
+${modeConfig.aiComplementaryBrief}
+
 Generate exactly ${count} NEW questions that:
 - both people will answer
 - are clearly different from every listed question (no repeats, near-duplicates, or close paraphrases)
 - do not ask the same thing with different words (e.g. if they asked about childhood pets, do not ask about animals they grew up with)
 - learn from their list: fill gaps and complementary angles they did not cover; avoid their topics when those topics are already well covered
-- mix depth: ${depthMixLine(mode)}
-- tone: ${modeConfig.aiTone}
+- follow the MODE BRIEF above for depth and tone (do not ignore its avoid-list)
 - are single sentences ending with ?
 - are under 120 characters each
 - avoid yes/no-only questions when possible
@@ -236,7 +231,13 @@ Return JSON only: { "questions": string[] } with exactly ${count} strings.`
   try {
     let text: string | null = null
     for (const model of models) {
-      text = await requestQuestions(apiKey, model, prompt, controller.signal)
+      text = await requestQuestions(
+        apiKey,
+        model,
+        prompt,
+        controller.signal,
+        COMPLEMENTARY_SYSTEM,
+      )
       if (text) {
         if (model !== models[0]) {
           console.warn('[openrouter] fell back to model', model)

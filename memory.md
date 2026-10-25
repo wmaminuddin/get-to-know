@@ -72,7 +72,7 @@ No custom server. Client writes/listens to `sessions/{code}/…`.
 ### Question bank + AI
 
 - File: `src/data/systemQuestions.ts` (~48 questions, depth 1–3, themes).
-- Modes: `src/lib/sessionModes.ts` — depth mixes + AI tone + default finale prompts.
+- Modes: `src/lib/sessionModes.ts` — depth mixes (bank) + `aiComplementaryBrief` (AI do/don't) + finale tone/defaults.
 - Picker: `src/lib/deck.ts` — low overlap with user questions; depth mix from session mode.
 - AI: `src/lib/aiQuestions.ts` — OpenRouter chat completions (primary `google/gemma-4-31b-it:free`, fallback `~z-ai/glm-flash-latest`); `resolveSystemQuestionTexts` prefers AI, fills gaps from bank; `generateFinalePrompt` for create-time Yes/No suggestion.
 - Count helpers: `src/lib/questionCount.ts` (clamp 3–15; `depthTargetsForMode`).
@@ -188,6 +188,12 @@ No custom server. Client writes/listens to `sessions/{code}/…`.
 - Host picks mode on create: Casual / Friends / Besties / Dating / Deep — steers bank depth mix + AI tone.
 - Finale stays Yes/No; host edits the prompt or uses “Suggest with AI” (falls back to mode default).
 - Old sessions without `sessionMode` / `finalePrompt` behave like Dating + “Next Date?”.
+
+### 2026-10-25 — Hybrid per-mode AI briefs
+
+- Replaced thin “mix depth: X%” prompt line with `aiComplementaryBrief` per mode (do/don’t + example style).
+- Shared scaffold kept for JSON/count/dedupe; system message tells the model to obey the brief strictly.
+- Bank depth mixes unchanged (still the authoritative fallback mix).
 
 ---
 
